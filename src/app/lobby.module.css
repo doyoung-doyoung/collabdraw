@@ -1,0 +1,230 @@
+.wrap {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.left {
+  width: 300px;
+  min-width: 300px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+}
+
+.logo {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  margin-bottom: 6px;
+}
+
+.logoText { color: var(--text); }
+.logoDraw { color: var(--purple2); }
+
+.logoSub {
+  font-size: 12px;
+  color: var(--text3);
+  letter-spacing: 1px;
+  margin-bottom: 28px;
+}
+
+.section {
+  margin-bottom: 20px;
+}
+
+.label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text3);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+  margin-bottom: 8px;
+}
+
+.input:focus {
+  border-color: rgba(124,58,237,0.5);
+}
+
+.colorRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.colorBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  transition: transform 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.colorBtn:hover {
+  transform: scale(1.2);
+}
+
+.colorBtnActive {
+  border-color: #fff !important;
+  transform: scale(1.2);
+}
+
+.colorPicker {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 8px 0 20px;
+}
+
+.btnCreate {
+  width: 100%;
+  padding: 11px;
+  background: linear-gradient(135deg, var(--purple), var(--blue));
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.btnCreate:hover { opacity: 0.88; transform: translateY(-1px); }
+.btnCreate:active { transform: translateY(0); }
+.btnCreate:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 32px;
+  overflow: hidden;
+}
+
+.rightHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.rightTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.refreshBtn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text2);
+  font-size: 16px;
+  padding: 4px 10px;
+  transition: background 0.15s;
+}
+
+.refreshBtn:hover { background: rgba(255,255,255,0.1); }
+
+.roomList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.roomCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.roomCard:hover {
+  border-color: rgba(124,58,237,0.4);
+  background: rgba(124,58,237,0.06);
+}
+
+.roomInfo { flex: 1; }
+
+.roomName {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.roomMeta {
+  font-size: 12px;
+  color: var(--text3);
+}
+
+.joinBtn {
+  padding: 7px 16px;
+  background: rgba(124,58,237,0.15);
+  border: 1px solid rgba(124,58,237,0.4);
+  border-radius: 6px;
+  color: var(--purple2);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.joinBtn:hover {
+  background: rgba(124,58,237,0.3);
+}
+
+.joinBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.noRooms {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+  color: var(--text2);
+  font-size: 15px;
+}
+
+.noRoomsSub {
+  font-size: 13px;
+  color: var(--text3);
+}
