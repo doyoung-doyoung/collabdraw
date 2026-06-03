@@ -101,72 +101,102 @@ export default function LobbyPage() {
 
   return (
     <div className={styles.wrap}>
+      {/* animated paint-blob backdrop */}
+      <div className={styles.blobs} aria-hidden="true">
+        <div className={`${styles.blob} ${styles.blob1}`} />
+        <div className={`${styles.blob} ${styles.blob2}`} />
+        <div className={`${styles.blob} ${styles.blob3}`} />
+        <div className={`${styles.blob} ${styles.blob4}`} />
+      </div>
+      <div className={styles.grain} aria-hidden="true" />
+
+      {/* LEFT — brand + controls */}
       <div className={styles.left}>
-        <div className={styles.logo}>
-          <span className={styles.logoText}>Collab</span>
-          <span className={styles.logoDraw}>Draw</span>
-        </div>
-        <p className={styles.logoSub}>Real-time collaborative canvas</p>
-
-        <div className={styles.section}>
-          <label className={styles.label}>Nickname</label>
-          <input
-            className={styles.input}
-            placeholder="Enter your name..."
-            value={userName}
-            onChange={e => setUserName(e.target.value)}
-            maxLength={14}
-          />
-        </div>
-
-        <div className={styles.section}>
-          <label className={styles.label}>My Color</label>
-          <div className={styles.colorRow}>
-            {PRESET_COLORS.map(c => (
-              <button
-                key={c}
-                className={`${styles.colorBtn} ${userColor === c ? styles.colorBtnActive : ''}`}
-                style={{ background: c }}
-                onClick={() => setUserColor(c)}
-              />
-            ))}
-            <input
-              type="color"
-              value={userColor}
-              onChange={e => setUserColor(e.target.value)}
-              className={styles.colorPicker}
-              title="Custom color"
-            />
+        <div className={styles.brand}>
+          <div className={styles.logo}>
+            <span className={styles.logoText}>Collab</span>
+            <span className={styles.logoDraw}>Draw</span>
+            <span className={styles.logoDot} />
+          </div>
+          <p className={styles.logoSub}>
+            Jump on a shared canvas and draw together in real time — make art multiplayer.
+          </p>
+          <div className={styles.liveDots} aria-hidden="true">
+            <span className={styles.liveDot} style={{ background: '#7c3aed' }} />
+            <span className={styles.liveDot} style={{ background: '#2563eb' }} />
+            <span className={styles.liveDot} style={{ background: '#db2777' }} />
+            <span className={styles.liveDot} style={{ background: '#16a34a' }} />
+            <span className={styles.liveLabel}>artists online</span>
           </div>
         </div>
 
-        <div className={styles.divider} />
+        <div className={styles.card}>
+          <div className={styles.section}>
+            <label className={styles.label}>Nickname</label>
+            <input
+              className={styles.input}
+              placeholder="Enter your name..."
+              value={userName}
+              onChange={e => setUserName(e.target.value)}
+              maxLength={14}
+            />
+          </div>
 
-        <div className={styles.section}>
-          <label className={styles.label}>Create New Room</label>
-          <input
-            className={styles.input}
-            placeholder="Room name..."
-            value={roomName}
-            onChange={e => setRoomName(e.target.value)}
-            maxLength={24}
-            onKeyDown={e => e.key === 'Enter' && createRoom()}
-          />
-          <button className={styles.btnCreate} onClick={createRoom} disabled={loading}>
-            {loading ? 'Creating...' : '+ Create Room'}
-          </button>
+          <div className={styles.section}>
+            <label className={styles.label}>My Color</label>
+            <div className={styles.colorRow}>
+              {PRESET_COLORS.map(c => (
+                <button
+                  key={c}
+                  className={`${styles.colorBtn} ${userColor === c ? styles.colorBtnActive : ''}`}
+                  style={{ background: c }}
+                  onClick={() => setUserColor(c)}
+                  aria-label={`Pick color ${c}`}
+                />
+              ))}
+              <input
+                type="color"
+                value={userColor}
+                onChange={e => setUserColor(e.target.value)}
+                className={styles.colorPicker}
+                title="Custom color"
+              />
+            </div>
+          </div>
+
+          <div className={styles.divider} />
+
+          <div className={styles.section}>
+            <label className={styles.label}>Create New Room</label>
+            <input
+              className={styles.input}
+              placeholder="Room name..."
+              value={roomName}
+              onChange={e => setRoomName(e.target.value)}
+              maxLength={24}
+              onKeyDown={e => e.key === 'Enter' && createRoom()}
+            />
+            <button className={styles.btnCreate} onClick={createRoom} disabled={loading}>
+              {loading ? 'Creating...' : '+ Create Room'}
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* RIGHT — open rooms */}
       <div className={styles.right}>
         <div className={styles.rightHeader}>
-          <span className={styles.rightTitle}>🏠 Open Rooms</span>
-          <button className={styles.refreshBtn} onClick={fetchRooms}>↻</button>
+          <span className={styles.rightTitle}>
+            Open Rooms
+            <span className={styles.countPill}>{rooms.length}</span>
+          </span>
+          <button className={styles.refreshBtn} onClick={fetchRooms} aria-label="Refresh rooms">↻</button>
         </div>
 
         {rooms.length === 0 ? (
           <div className={styles.noRooms}>
-            <span>No open rooms yet</span>
+            <span className={styles.noRoomsIcon}>🎨</span>
+            <span className={styles.noRoomsTitle}>No open rooms yet</span>
             <span className={styles.noRoomsSub}>Be the first to create one!</span>
           </div>
         ) : (
