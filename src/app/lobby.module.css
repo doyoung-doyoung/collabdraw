@@ -1,230 +1,329 @@
+/* ============================================================
+   CollabDraw — Lobby (Magma-inspired, mobile-first responsive)
+   ============================================================ */
+
 .wrap {
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
+  position: relative;
+  min-height: 100dvh;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  isolation: isolate;
 }
 
+/* ---------- animated paint-blob backdrop ---------- */
+.blobs {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+  pointer-events: none;
+}
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.55;
+  mix-blend-mode: screen;
+  animation: float 18s ease-in-out infinite;
+}
+.blob1 { width: 420px; height: 420px; background: #7c3aed; top: -80px; left: -60px; animation-delay: 0s; }
+.blob2 { width: 360px; height: 360px; background: #2563eb; bottom: -100px; left: 22%; animation-delay: -4s; }
+.blob3 { width: 380px; height: 380px; background: #db2777; top: 12%; right: -80px; animation-delay: -8s; }
+.blob4 { width: 300px; height: 300px; background: #0d9488; bottom: 8%; right: 18%; animation-delay: -12s; }
+
+@keyframes float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(40px, -30px) scale(1.08); }
+  66%      { transform: translate(-30px, 25px) scale(0.94); }
+}
+
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.015) 0.5px, transparent 0.5px);
+  background-size: 3px 3px;
+}
+
+/* ---------- left: brand + controls ---------- */
 .left {
-  width: 300px;
-  min-width: 300px;
-  background: var(--bg2);
-  border-right: 1px solid var(--border);
-  padding: 32px 24px;
+  padding: clamp(28px, 5vw, 64px) clamp(24px, 4vw, 56px);
   display: flex;
   flex-direction: column;
-  gap: 0;
-  overflow-y: auto;
+  justify-content: center;
+  gap: 26px;
 }
+
+.brand { margin-bottom: 4px; }
 
 .logo {
-  font-size: 28px;
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(40px, 7vw, 64px);
   font-weight: 800;
-  letter-spacing: -1.5px;
-  margin-bottom: 6px;
+  letter-spacing: -2px;
+  line-height: 0.95;
+  display: inline-flex;
+  align-items: baseline;
 }
-
 .logoText { color: var(--text); }
-.logoDraw { color: var(--purple2); }
+.logoDraw {
+  background: linear-gradient(110deg, var(--purple2) 0%, #60a5fa 45%, #f472b6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.logoDot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: #f472b6;
+  margin-left: 6px;
+  align-self: center;
+  animation: pulse 1.6s ease-in-out infinite;
+  box-shadow: 0 0 16px #f472b6;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.7); }
+}
 
 .logoSub {
-  font-size: 12px;
-  color: var(--text3);
-  letter-spacing: 1px;
-  margin-bottom: 28px;
+  font-size: clamp(13px, 1.4vw, 15px);
+  color: var(--text2);
+  margin-top: 12px;
+  max-width: 30ch;
+  line-height: 1.5;
 }
 
-.section {
-  margin-bottom: 20px;
+.liveDots { display: flex; align-items: center; gap: 6px; margin-top: 16px; }
+.liveDot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--bg); margin-left: -8px; }
+.liveDot:first-child { margin-left: 0; }
+.liveLabel {
+  font-size: 12px; color: var(--text2); margin-left: 10px;
+  display: inline-flex; align-items: center; gap: 6px;
 }
+.liveLabel::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: #22c55e; box-shadow: 0 0 8px #22c55e;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+/* ---------- glass control card ---------- */
+.card {
+  background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: clamp(20px, 3vw, 28px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 24px 60px -24px rgba(0,0,0,0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 460px;
+}
+
+.section { display: flex; flex-direction: column; gap: 9px; }
 
 .label {
-  display: block;
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--text3);
-  margin-bottom: 8px;
-  font-weight: 600;
+  letter-spacing: 1.6px;
+  color: var(--text2);
+  font-weight: 700;
 }
 
 .input {
   width: 100%;
-  padding: 10px 14px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: 13px 16px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
   color: var(--text);
-  font-size: 14px;
+  font-size: 15px;
   outline: none;
-  transition: border-color 0.15s;
-  margin-bottom: 8px;
+  transition: border-color 0.18s, box-shadow 0.18s;
 }
-
+.input::placeholder { color: var(--text3); }
 .input:focus {
-  border-color: rgba(124,58,237,0.5);
+  border-color: var(--purple2);
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.25);
 }
 
-.colorRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
+.colorRow { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
 .colorBtn {
-  width: 24px;
-  height: 24px;
+  width: 30px; height: 30px;
   border-radius: 50%;
   border: 2px solid transparent;
-  transition: transform 0.15s, border-color 0.15s;
+  transition: transform 0.15s, box-shadow 0.15s;
   flex-shrink: 0;
 }
-
-.colorBtn:hover {
-  transform: scale(1.2);
-}
-
+.colorBtn:hover { transform: scale(1.18); }
 .colorBtnActive {
   border-color: #fff !important;
-  transform: scale(1.2);
+  transform: scale(1.18);
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.18);
 }
-
 .colorPicker {
-  width: 24px;
-  height: 24px;
+  width: 30px; height: 30px;
   border-radius: 50%;
-  border: none;
+  border: 2px dashed var(--border2);
   background: transparent;
   cursor: pointer;
   padding: 0;
 }
 
-.divider {
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: 8px 0 20px;
-}
+.divider { border: none; border-top: 1px solid var(--border); margin: 2px 0; }
 
 .btnCreate {
   width: 100%;
-  padding: 11px;
-  background: linear-gradient(135deg, var(--purple), var(--blue));
+  padding: 15px;
+  background: linear-gradient(110deg, var(--purple), var(--blue) 60%, #db2777);
+  background-size: 180% 100%;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   color: #fff;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
-  transition: opacity 0.15s, transform 0.1s;
+  letter-spacing: 0.2px;
+  transition: background-position 0.4s, transform 0.1s, box-shadow 0.2s;
+  box-shadow: 0 12px 30px -10px rgba(124,58,237,0.6);
 }
-
-.btnCreate:hover { opacity: 0.88; transform: translateY(-1px); }
+.btnCreate:hover { background-position: 100% 0; transform: translateY(-2px); }
 .btnCreate:active { transform: translateY(0); }
 .btnCreate:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
+/* ---------- right: open rooms ---------- */
 .right {
-  flex: 1;
+  padding: clamp(28px, 5vw, 64px) clamp(24px, 4vw, 56px);
   display: flex;
   flex-direction: column;
-  padding: 32px;
-  overflow: hidden;
+  gap: 18px;
+  border-left: 1px solid var(--border);
+  background: rgba(0,0,0,0.18);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  min-height: 100dvh;
 }
 
-.rightHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
+.rightHeader { display: flex; align-items: center; justify-content: space-between; }
 .rightTitle {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  font-size: 20px; font-weight: 700; color: var(--text);
+  display: inline-flex; align-items: center; gap: 9px;
 }
-
+.countPill {
+  font-family: 'Sora', sans-serif;
+  font-size: 12px; font-weight: 600;
+  color: var(--purple2);
+  background: rgba(124,58,237,0.16);
+  border: 1px solid rgba(124,58,237,0.35);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
 .refreshBtn {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
   color: var(--text2);
-  font-size: 16px;
-  padding: 4px 10px;
-  transition: background 0.15s;
+  font-size: 17px;
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  transition: background 0.15s, transform 0.3s;
 }
-
-.refreshBtn:hover { background: rgba(255,255,255,0.1); }
+.refreshBtn:hover { background: rgba(255,255,255,0.12); transform: rotate(180deg); }
 
 .roomList {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  overflow-y: auto;
-  flex: 1;
+  display: flex; flex-direction: column; gap: 11px;
+  overflow-y: auto; flex: 1;
 }
 
 .roomCard {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px;
-  background: rgba(255,255,255,0.03);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px 18px;
+  background: linear-gradient(150deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
   border: 1px solid var(--border);
-  border-radius: 10px;
-  transition: border-color 0.15s, background 0.15s;
+  border-radius: 14px;
+  transition: border-color 0.18s, transform 0.18s, background 0.18s;
 }
-
 .roomCard:hover {
-  border-color: rgba(124,58,237,0.4);
-  background: rgba(124,58,237,0.06);
+  border-color: rgba(124,58,237,0.5);
+  background: rgba(124,58,237,0.08);
+  transform: translateX(3px);
 }
-
-.roomInfo { flex: 1; }
-
+.roomInfo { flex: 1; min-width: 0; }
 .roomName {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 3px;
+  font-size: 15px; font-weight: 700; color: var(--text);
+  margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-
-.roomMeta {
-  font-size: 12px;
-  color: var(--text3);
-}
+.roomMeta { font-size: 12px; color: var(--text2); }
 
 .joinBtn {
-  padding: 7px 16px;
-  background: rgba(124,58,237,0.15);
-  border: 1px solid rgba(124,58,237,0.4);
-  border-radius: 6px;
+  padding: 10px 20px;
+  background: rgba(124,58,237,0.18);
+  border: 1px solid rgba(124,58,237,0.45);
+  border-radius: 10px;
   color: var(--purple2);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 13px; font-weight: 700;
   transition: all 0.15s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
-
-.joinBtn:hover {
-  background: rgba(124,58,237,0.3);
-}
-
-.joinBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.joinBtn:hover { background: rgba(124,58,237,0.35); color: #fff; }
+.joinBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .noRooms {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
   flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; text-align: center;
   color: var(--text2);
-  font-size: 15px;
+  border: 1.5px dashed var(--border2);
+  border-radius: 16px;
+  padding: 40px 20px;
+}
+.noRoomsIcon { font-size: 38px; opacity: 0.5; }
+.noRoomsTitle { font-size: 15px; font-weight: 600; color: var(--text); }
+.noRoomsSub { font-size: 13px; color: var(--text3); }
+
+/* ============================================================
+   RESPONSIVE — tablet & mobile
+   ============================================================ */
+@media (max-width: 900px) {
+  .wrap {
+    grid-template-columns: 1fr;
+    min-height: 100dvh;
+  }
+  .left {
+    justify-content: flex-start;
+    padding: 40px 22px 28px;
+    gap: 22px;
+  }
+  .card { max-width: 100%; }
+  .right {
+    border-left: none;
+    border-top: 1px solid var(--border);
+    min-height: auto;
+    padding: 28px 22px 48px;
+  }
+  .roomList { max-height: none; }
 }
 
-.noRoomsSub {
-  font-size: 13px;
-  color: var(--text3);
+@media (max-width: 560px) {
+  .left { padding: 32px 18px 24px; }
+  .right { padding: 24px 18px 40px; }
+  .logo { letter-spacing: -1.5px; }
+  .card { border-radius: 18px; padding: 18px; }
+  .input { padding: 14px 16px; font-size: 16px; } /* 16px avoids iOS zoom-on-focus */
+  .colorBtn, .colorPicker { width: 34px; height: 34px; } /* bigger tap targets */
+  .btnCreate { padding: 16px; }
+  .joinBtn { padding: 12px 18px; }
+  .roomCard { padding: 15px 16px; }
+}
+
+/* respect reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .blob, .logoDot, .liveLabel::before { animation: none; }
 }
