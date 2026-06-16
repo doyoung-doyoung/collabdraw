@@ -468,3 +468,190 @@
   background: rgba(255,255,255,0.1);
   transform: scale(1.25);
 }
+
+/* ── Remote cursors ── */
+.remoteCursor {
+  position: absolute;
+  pointer-events: none;
+  z-index: 30;
+  transform: translate(-2px, -2px);
+  transition: left 0.05s, top 0.05s;
+}
+
+.cursorLabel {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  margin-top: 1px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+/* ── Timelapse overlay ── */
+.timelapseOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 10, 20, 0.82);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  z-index: 50;
+}
+
+.timelapseIcon { font-size: 48px; animation: pulse 1.2s ease-in-out infinite; }
+
+.timelapseTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.2px;
+}
+
+.timelapseBar {
+  width: min(320px, 80%);
+  height: 8px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.timelapseBarFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--purple, #7c3aed), #60a5fa);
+  border-radius: 99px;
+  transition: width 0.08s linear;
+}
+
+.timelapsePercent {
+  font-size: 13px;
+  color: rgba(255,255,255,0.6);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.timelapseStop {
+  padding: 9px 24px;
+  background: rgba(220,38,38,0.18);
+  border: 1px solid rgba(220,38,38,0.5);
+  border-radius: 8px;
+  color: #f87171;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.timelapseStop:hover { background: rgba(220,38,38,0.35); }
+
+/* ============================================================
+   MOBILE RESPONSIVE
+   ============================================================ */
+
+.mobileBar { display: none; }
+.mobileOverlay { display: none; }
+.sidebarOpen { transform: none !important; }
+.rightPanelOpen { transform: none !important; }
+
+@media (max-width: 768px) {
+  .app { height: 100dvh; }
+
+  .topbar { padding: 0 8px; gap: 5px; }
+  .userChips { display: none; }
+
+  .tbBtn { padding: 4px 7px; font-size: 10px; }
+
+  /* Sidebar — slide in from left */
+  .sidebar {
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    z-index: 200;
+    width: 220px;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    padding-top: 48px;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+  }
+  .sidebarOpen { transform: translateX(0) !important; }
+
+  /* Right panel — slide in from right */
+  .rightPanel {
+    position: fixed;
+    right: 0; top: 0; bottom: 0;
+    z-index: 200;
+    width: 240px;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    padding-top: 48px;
+    box-shadow: -4px 0 24px rgba(0,0,0,0.5);
+  }
+  .rightPanelOpen { transform: translateX(0) !important; }
+
+  /* Backdrop */
+  .mobileOverlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 190;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+
+  /* Canvas gets extra bottom padding for the bar */
+  .canvasWrap { padding-bottom: 60px; }
+
+  /* Bottom navigation bar */
+  .mobileBar {
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 60px;
+    z-index: 100;
+    align-items: center;
+    justify-content: space-around;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    padding: 0 4px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .mobileBarBtn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background: transparent;
+    border: none;
+    color: var(--text2);
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+    min-width: 52px;
+  }
+  .mobileBarBtn:active { transform: scale(0.9); }
+  .mobileBarBtnActive {
+    color: var(--purple2) !important;
+    background: rgba(124,58,237,0.18) !important;
+  }
+
+  .mobileBarLabel {
+    font-size: 9px;
+    color: var(--text3);
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+
+  /* Zoom badge inside canvas */
+  .zoomBadge { bottom: 70px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .rightPanel { transition: none; }
+}
