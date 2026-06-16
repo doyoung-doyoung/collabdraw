@@ -10,6 +10,7 @@ export default function LobbyPage() {
   const router = useRouter()
   const [userName, setUserName] = useState('')
   const [roomName, setRoomName] = useState('')
+  const [roomPassword, setRoomPassword] = useState('')
   const [rooms, setRooms] = useState<Room[]>([])
   const [loading, setLoading] = useState(false)
   const [joiningId, setJoiningId] = useState<string | null>(null)
@@ -74,6 +75,7 @@ export default function LobbyPage() {
       name: roomName.trim(),
       host_id: userId,
       host_name: userName.trim(),
+      password: roomPassword.trim(),
       timer_seconds: 0,
       is_ended: false,
     })
@@ -90,6 +92,13 @@ export default function LobbyPage() {
 
   const joinRoom = async (room: Room) => {
     if (!userName.trim()) { alert('Please enter a nickname'); return }
+
+    if (room.password && room.password.trim()) {
+      const entered = prompt(`🔒 This room is password-protected.\nEnter password:`)
+      if (entered === null) return
+      if (entered !== room.password) { alert('❌ Wrong password!'); return }
+    }
+
     setJoiningId(room.id)
     const userId = getUserId()
     saveUser(userColor, userName)
@@ -112,7 +121,6 @@ export default function LobbyPage() {
 
   return (
     <div className={styles.wrap}>
-      {/* animated paint-blob backdrop */}
       <div className={styles.blobs} aria-hidden="true">
         <div className={`${styles.blob} ${styles.blob1}`} />
         <div className={`${styles.blob} ${styles.blob2}`} />
@@ -187,6 +195,14 @@ export default function LobbyPage() {
               maxLength={24}
               onKeyDown={e => e.key === 'Enter' && createRoom()}
             />
+            <input
+              className={styles.input}
+              placeholder="Password (optional — leave blank for public)"
+              value={roomPassword}
+              onChange={e => setRoomPassword(e.target.value)}
+              maxLength={32}
+              type="text"
+            />
             <button className={styles.btnCreate} onClick={createRoom} disabled={loading}>
               {loading ? 'Creating...' : '+ Create Room'}
             </button>
@@ -215,7 +231,9 @@ export default function LobbyPage() {
             {rooms.map(room => (
               <div key={room.id} className={styles.roomCard}>
                 <div className={styles.roomInfo}>
-                  <div className={styles.roomName}>{room.name}</div>
+                  <div className={styles.roomName}>
+                    {room.password ? '🔒 ' : ''}{room.name}
+                  </div>
                   <div className={styles.roomMeta}>Host: {room.host_name} 👑</div>
                 </div>
                 <button

@@ -469,6 +469,85 @@
   transform: scale(1.25);
 }
 
+/* ── Remote cursors ── */
+.remoteCursor {
+  position: absolute;
+  pointer-events: none;
+  z-index: 30;
+  transform: translate(-2px, -2px);
+  transition: left 0.05s, top 0.05s;
+}
+
+.cursorLabel {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  margin-top: 1px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+/* ── Timelapse overlay ── */
+.timelapseOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 10, 20, 0.82);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  z-index: 50;
+}
+
+.timelapseIcon { font-size: 48px; animation: pulse 1.2s ease-in-out infinite; }
+
+.timelapseTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.2px;
+}
+
+.timelapseBar {
+  width: min(320px, 80%);
+  height: 8px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.timelapseBarFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--purple, #7c3aed), #60a5fa);
+  border-radius: 99px;
+  transition: width 0.08s linear;
+}
+
+.timelapsePercent {
+  font-size: 13px;
+  color: rgba(255,255,255,0.6);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.timelapseStop {
+  padding: 9px 24px;
+  background: rgba(220,38,38,0.18);
+  border: 1px solid rgba(220,38,38,0.5);
+  border-radius: 8px;
+  color: #f87171;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.timelapseStop:hover { background: rgba(220,38,38,0.35); }
+
 /* ============================================================
    MOBILE RESPONSIVE
    ============================================================ */

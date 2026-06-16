@@ -6,6 +6,7 @@ create table if not exists rooms (
   name text not null,
   host_id text not null,
   host_name text not null,
+  password text default '',
   timer_seconds integer default 0,
   timer_started_at timestamptz,
   timer_paused boolean default false,
@@ -76,3 +77,6 @@ create policy "public_all" on room_users for all using (true) with check (true);
 create policy "public_all" on strokes for all using (true) with check (true);
 create policy "public_all" on comments for all using (true) with check (true);
 create policy "public_all" on chat_messages for all using (true) with check (true);
+
+-- Migration for existing databases: add password column
+-- alter table rooms add column if not exists password text default '';

@@ -10,6 +10,7 @@ export type Room = {
     name: string
     host_id: string
     host_name: string
+    password?: string
     timer_seconds: number
     timer_started_at: string | null
     timer_paused: boolean

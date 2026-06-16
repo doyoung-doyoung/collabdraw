@@ -11,6 +11,8 @@ import CommentModal from '@/components/CommentModal'
 
 type Tool = 'pen' | 'line' | 'rect' | 'circle' | 'eraser' | 'fill' | 'text'
 
+type RemoteCursor = { userId: string; name: string; color: string; x: number; y: number }
+
 export default function RoomPage() {
   const { id: roomId } = useParams<{ id: string }>()
   const router = useRouter()
@@ -23,6 +25,7 @@ export default function RoomPage() {
   const [users, setUsers] = useState<RoomUser[]>([])
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [comments, setComments] = useState<Comment[]>([])
+  const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({})
 
   const [myId] = useState(() => sessionStorage.getItem('collabdraw_uid') || '')
   const [myName] = useState(() => sessionStorage.getItem('collabdraw_name') || 'Guest')
@@ -45,6 +48,19 @@ export default function RoomPage() {
   const currentStroke = useRef<{ x: number; y: number }[]>([])
   const pixelArea = useRef(0)
 
+  /* ── Undo / Redo ── */
+  const strokeHistory = useRef<number[]>([])
+  const undoStack = useRef<Stroke[]>([])
+
+  /* ── Cursor broadcast ── */
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const lastCursorBroadcast = useRef(0)
+
+  /* ── Timelapse ── */
+  const [showTimelapse, setShowTimelapse] = useState(false)
+  const [timelapseProgress, setTimelapseProgress] = useState(0)
+  const timelapseRunning = useRef(false)
+
   const [commentMode, setCommentMode] = useState(false)
   const [pendingCommentPos, setPendingCommentPos] = useState<{ x: number; y: number } | null>(null)
 
@@ -65,6 +81,74 @@ export default function RoomPage() {
   const getCtx = () => canvasRef.current?.getContext('2d') || null
   const getOctx = () => overlayRef.current?.getContext('2d') || null
 
+  /* ── Canvas draw ── */
+  const drawStroke = useCallback((s: Stroke) => {
+    const ctx = getCtx()
+    if (!ctx || !s.points || s.points.length < 1) return
+    ctx.save()
+
+    if (s.tool === 'image' && s.points.length >= 2 && s.emoji) {
+      const img = new Image()
+      img.onload = () => {
+        const [a, b] = [s.points[0], s.points[1]]
+        ctx.drawImage(img, a.x, a.y, b.x - a.x, b.y - a.y)
+      }
+      img.src = s.emoji
+      ctx.restore()
+      return
+    }
+
+    if (s.points.length < 2) { ctx.restore(); return }
+
+    if (s.tool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out'
+      ctx.strokeStyle = 'rgba(0,0,0,1)'
+    } else {
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.strokeStyle = s.user_color
+    }
+    ctx.lineWidth = s.size
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+
+    if (s.tool === 'pen' || s.tool === 'eraser') {
+      ctx.beginPath()
+      ctx.moveTo(s.points[0].x, s.points[0].y)
+      for (let i = 1; i < s.points.length; i++) ctx.lineTo(s.points[i].x, s.points[i].y)
+      ctx.stroke()
+      if (s.emoji && s.tool === 'pen') {
+        ctx.font = `${s.size + 10}px serif`
+        s.points.forEach((p, i) => { if (i % 8 === 0) ctx.fillText(s.emoji!, p.x, p.y) })
+      }
+    } else if (s.tool === 'line') {
+      const [a, b] = [s.points[0], s.points[s.points.length - 1]]
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke()
+    } else if (s.tool === 'rect') {
+      const [a, b] = [s.points[0], s.points[s.points.length - 1]]
+      ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y)
+    } else if (s.tool === 'circle') {
+      const [a, b] = [s.points[0], s.points[s.points.length - 1]]
+      const rx = (b.x - a.x) / 2, ry = (b.y - a.y) / 2
+      ctx.beginPath(); ctx.ellipse(a.x + rx, a.y + ry, Math.abs(rx), Math.abs(ry), 0, 0, Math.PI * 2); ctx.stroke()
+    } else if (s.tool === 'text' && s.emoji) {
+      ctx.font = `${s.size * 4 + 12}px sans-serif`
+      ctx.fillStyle = s.user_color
+      ctx.fillText(s.emoji, s.points[0].x, s.points[0].y)
+    }
+    ctx.restore()
+  }, [])
+
+  const redrawCanvas = useCallback(async () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')!
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+    const { data } = await supabase.from('strokes').select('*').eq('room_id', roomId).order('id')
+    if (data) data.forEach(s => drawStroke(s as Stroke))
+  }, [roomId, drawStroke])
+
   /* ── Init ── */
   useEffect(() => {
     if (!roomId || !myId) return
@@ -81,8 +165,7 @@ export default function RoomPage() {
   useEffect(() => {
     if (!myId || !roomId) return
     const handleBeforeUnload = () => {
-      const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/room_users?id=eq.${myId}&room_id=eq.${roomId}`
-      fetch(url, {
+      fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/room_users?id=eq.${myId}&room_id=eq.${roomId}`, {
         method: 'DELETE',
         headers: {
           'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
@@ -94,6 +177,57 @@ export default function RoomPage() {
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [myId, roomId])
+
+  /* ── Keyboard shortcuts: Undo / Redo ── */
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') { e.preventDefault(); undo() }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); redo() }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
+  /* ── Image paste ── */
+  useEffect(() => {
+    if (!roomId || !myId) return
+    const handlePaste = (e: ClipboardEvent) => {
+      if (!e.clipboardData) return
+      for (const item of Array.from(e.clipboardData.items)) {
+        if (!item.type.startsWith('image/')) continue
+        const file = item.getAsFile()
+        if (!file) continue
+        const reader = new FileReader()
+        reader.onload = async (ev) => {
+          const img = new Image()
+          img.onload = async () => {
+            const maxW = 800, maxH = 600
+            const scale = Math.min(1, maxW / img.width, maxH / img.height)
+            const w = Math.round(img.width * scale)
+            const h = Math.round(img.height * scale)
+            const x = Math.round((CANVAS_WIDTH - w) / 2)
+            const y = Math.round((CANVAS_HEIGHT - h) / 2)
+            getCtx()?.drawImage(img, x, y, w, h)
+            const tmp = document.createElement('canvas')
+            tmp.width = w; tmp.height = h
+            tmp.getContext('2d')!.drawImage(img, 0, 0, w, h)
+            const dataUrl = tmp.toDataURL('image/jpeg', 0.5)
+            const stroke: Stroke = {
+              room_id: roomId, user_id: myId, user_color: myColor,
+              tool: 'image' as Tool, points: [{ x, y }, { x: x + w, y: y + h }], size: 1, emoji: dataUrl,
+            }
+            const { data: ins } = await supabase.from('strokes').insert(stroke).select('id').single()
+            if (ins?.id) strokeHistory.current.push(ins.id as number)
+          }
+          img.src = ev.target?.result as string
+        }
+        reader.readAsDataURL(file)
+        break
+      }
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [roomId, myId, myColor])
 
   const loadRoom = async () => {
     const { data } = await supabase.from('rooms').select('*').eq('id', roomId).single()
@@ -130,7 +264,7 @@ export default function RoomPage() {
   }
 
   const subscribeAll = () => {
-    supabase.channel('room_' + roomId)
+    const ch = supabase.channel('room_' + roomId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'strokes', filter: `room_id=eq.${roomId}` },
         payload => { if (payload.new.user_id !== myId) drawStroke(payload.new as Stroke) })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'room_users', filter: `room_id=eq.${roomId}` },
@@ -151,7 +285,27 @@ export default function RoomPage() {
           }
           if (r.timer_paused) { setTimerActive(false) }
         })
+      .on('broadcast', { event: 'cursor' }, ({ payload }: { payload: RemoteCursor }) => {
+        if (payload.userId !== myId) {
+          setRemoteCursors(prev => ({ ...prev, [payload.userId]: payload }))
+        }
+      })
+      .on('broadcast', { event: 'cursor_leave' }, ({ payload }: { payload: { userId: string } }) => {
+        setRemoteCursors(prev => { const n = { ...prev }; delete n[payload.userId]; return n })
+      })
       .subscribe()
+    channelRef.current = ch
+  }
+
+  const broadcastCursor = (pos: { x: number; y: number }) => {
+    const now = Date.now()
+    if (now - lastCursorBroadcast.current < 50) return
+    lastCursorBroadcast.current = now
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'cursor',
+      payload: { userId: myId, name: myName, color: myColor, x: pos.x, y: pos.y },
+    })
   }
 
   /* ── Timer ── */
@@ -206,49 +360,6 @@ export default function RoomPage() {
     }, 30000)
   }
 
-  /* ── Canvas draw ── */
-  const drawStroke = useCallback((s: Stroke) => {
-    const ctx = getCtx()
-    if (!ctx || !s.points || s.points.length < 2) return
-    ctx.save()
-    if (s.tool === 'eraser') {
-      ctx.globalCompositeOperation = 'destination-out'
-      ctx.strokeStyle = 'rgba(0,0,0,1)'
-    } else {
-      ctx.globalCompositeOperation = 'source-over'
-      ctx.strokeStyle = s.user_color
-    }
-    ctx.lineWidth = s.size
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
-
-    if (s.tool === 'pen' || s.tool === 'eraser') {
-      ctx.beginPath()
-      ctx.moveTo(s.points[0].x, s.points[0].y)
-      for (let i = 1; i < s.points.length; i++) ctx.lineTo(s.points[i].x, s.points[i].y)
-      ctx.stroke()
-      if (s.emoji && s.tool === 'pen') {
-        ctx.font = `${s.size + 10}px serif`
-        s.points.forEach((p, i) => { if (i % 8 === 0) ctx.fillText(s.emoji!, p.x, p.y) })
-      }
-    } else if (s.tool === 'line' && s.points.length >= 2) {
-      const [a, b] = [s.points[0], s.points[s.points.length - 1]]
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke()
-    } else if (s.tool === 'rect' && s.points.length >= 2) {
-      const [a, b] = [s.points[0], s.points[s.points.length - 1]]
-      ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y)
-    } else if (s.tool === 'circle' && s.points.length >= 2) {
-      const [a, b] = [s.points[0], s.points[s.points.length - 1]]
-      const rx = (b.x - a.x) / 2, ry = (b.y - a.y) / 2
-      ctx.beginPath(); ctx.ellipse(a.x + rx, a.y + ry, Math.abs(rx), Math.abs(ry), 0, 0, Math.PI * 2); ctx.stroke()
-    } else if (s.tool === 'text' && s.points.length >= 1 && s.emoji) {
-      ctx.font = `${s.size * 4 + 12}px sans-serif`
-      ctx.fillStyle = s.user_color
-      ctx.fillText(s.emoji, s.points[0].x, s.points[0].y)
-    }
-    ctx.restore()
-  }, [])
-
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -274,19 +385,65 @@ export default function RoomPage() {
   const getCanvasPos = (e: React.MouseEvent) => {
     const canvas = canvasRef.current!
     const rect = canvas.getBoundingClientRect()
-    return {
-      x: (e.clientX - rect.left) / zoom,
-      y: (e.clientY - rect.top) / zoom,
-    }
+    return { x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom }
   }
 
   const getTouchPos = (touch: React.Touch) => {
     const canvas = canvasRef.current!
     const rect = canvas.getBoundingClientRect()
-    return {
-      x: (touch.clientX - rect.left) / zoom,
-      y: (touch.clientY - rect.top) / zoom,
+    return { x: (touch.clientX - rect.left) / zoom, y: (touch.clientY - rect.top) / zoom }
+  }
+
+  /* ── Shared draw move ── */
+  const applyDrawMove = (pos: { x: number; y: number }) => {
+    const ctx = getCtx()!
+    const octx = getOctx()!
+    if (tool === 'pen' || tool === 'eraser') {
+      if (tool === 'eraser') {
+        ctx.save(); ctx.globalCompositeOperation = 'destination-out'
+        ctx.strokeStyle = 'rgba(0,0,0,1)'; ctx.lineWidth = size * 3; ctx.lineCap = 'round'
+        ctx.lineTo(pos.x, pos.y); ctx.stroke(); ctx.restore()
+      } else {
+        ctx.strokeStyle = color; ctx.lineWidth = size; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+        ctx.lineTo(pos.x, pos.y); ctx.stroke()
+        if (penEmoji && currentStroke.current.length % 8 === 0) {
+          ctx.font = `${size + 10}px serif`; ctx.fillText(penEmoji, pos.x, pos.y)
+        }
+      }
+      const dx = pos.x - lastPos.current.x, dy = pos.y - lastPos.current.y
+      pixelArea.current += Math.sqrt(dx * dx + dy * dy) * size
+    } else {
+      const start = currentStroke.current[0]
+      octx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+      octx.strokeStyle = color; octx.lineWidth = size; octx.lineCap = 'round'
+      if (tool === 'line') { octx.beginPath(); octx.moveTo(start.x, start.y); octx.lineTo(pos.x, pos.y); octx.stroke() }
+      else if (tool === 'rect') { octx.strokeRect(start.x, start.y, pos.x - start.x, pos.y - start.y) }
+      else if (tool === 'circle') {
+        const rx = (pos.x - start.x) / 2, ry = (pos.y - start.y) / 2
+        octx.beginPath(); octx.ellipse(start.x + rx, start.y + ry, Math.abs(rx), Math.abs(ry), 0, 0, Math.PI * 2); octx.stroke()
+      }
     }
+    currentStroke.current.push(pos)
+    lastPos.current = pos
+  }
+
+  const finishStroke = async (endPos?: { x: number; y: number }) => {
+    isDrawing.current = false
+    getOctx()?.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+    const points = currentStroke.current
+    if (points.length < 1) return
+
+    if (tool !== 'pen' && tool !== 'eraser' && endPos) {
+      points.push(endPos)
+      drawStroke({ room_id: roomId, user_id: myId, user_color: color, tool, points, size, emoji: penEmoji || undefined })
+    }
+    if (points.length < 2) return
+
+    const stroke: Stroke = { room_id: roomId, user_id: myId, user_color: color, tool, points, size, emoji: penEmoji || undefined }
+    const { data: ins } = await supabase.from('strokes').insert(stroke).select('id').single()
+    if (ins?.id) strokeHistory.current.push(ins.id as number)
+    await updatePixelArea()
+    currentStroke.current = []
   }
 
   /* ── Mouse events ── */
@@ -297,15 +454,10 @@ export default function RoomPage() {
       return
     }
     if (e.button !== 0) return
-    if (commentMode) {
-      const pos = getCanvasPos(e)
-      setPendingCommentPos(pos)
-      setShowCommentModal(true)
-      return
-    }
-    if (tool === 'fill') { floodFill(getCanvasPos(e)); return }
-    if (tool === 'text') { addText(getCanvasPos(e)); return }
     const pos = getCanvasPos(e)
+    if (commentMode) { setPendingCommentPos(pos); setShowCommentModal(true); return }
+    if (tool === 'fill') { floodFill(pos); return }
+    if (tool === 'text') { addText(pos); return }
     isDrawing.current = true
     lastPos.current = pos
     currentStroke.current = [pos]
@@ -315,15 +467,13 @@ export default function RoomPage() {
 
   const onMouseMove = (e: React.MouseEvent) => {
     if (isPanning.current) {
-      setPan({
-        x: panStart.current.px + e.clientX - panStart.current.x,
-        y: panStart.current.py + e.clientY - panStart.current.y,
-      })
+      setPan({ x: panStart.current.px + e.clientX - panStart.current.x, y: panStart.current.py + e.clientY - panStart.current.y })
       return
     }
+    const pos = getCanvasPos(e)
+    broadcastCursor(pos)
     if (emojiFollowerRef.current && penEmoji) {
-      const canvas = canvasRef.current!
-      const rect = canvas.getBoundingClientRect()
+      const rect = canvasRef.current!.getBoundingClientRect()
       emojiFollowerRef.current.style.left = (e.clientX - rect.left + 12) + 'px'
       emojiFollowerRef.current.style.top = (e.clientY - rect.top - 12) + 'px'
       emojiFollowerRef.current.style.display = 'block'
@@ -331,35 +481,13 @@ export default function RoomPage() {
       emojiFollowerRef.current.style.display = 'none'
     }
     if (!isDrawing.current) return
-    const pos = getCanvasPos(e)
     applyDrawMove(pos)
   }
 
-  const onMouseUp = async (e: React.MouseEvent) => {
+  const onMouseUp = (e: React.MouseEvent) => {
     if (isPanning.current) { isPanning.current = false; return }
     if (!isDrawing.current) return
-    isDrawing.current = false
-    const octx = getOctx()!
-    octx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
-
-    const points = currentStroke.current
-    if (points.length < 1) return
-
-    if (tool !== 'pen' && tool !== 'eraser' && points.length >= 1) {
-      const endPos = getCanvasPos(e)
-      points.push(endPos)
-      drawStroke({ room_id: roomId, user_id: myId, user_color: color, tool, points, size, emoji: penEmoji || undefined })
-    }
-
-    if (points.length < 2) return
-
-    const stroke: Stroke = {
-      room_id: roomId, user_id: myId, user_color: color,
-      tool, points, size, emoji: penEmoji || undefined,
-    }
-    await supabase.from('strokes').insert(stroke)
-    await updatePixelArea()
-    currentStroke.current = []
+    finishStroke(getCanvasPos(e))
   }
 
   /* ── Touch events ── */
@@ -399,81 +527,47 @@ export default function RoomPage() {
       lastTouchDistance.current = dist
       const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2
       const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2
-      setPan({
-        x: panStart.current.px + cx - panStart.current.x,
-        y: panStart.current.py + cy - panStart.current.y,
-      })
+      setPan({ x: panStart.current.px + cx - panStart.current.x, y: panStart.current.py + cy - panStart.current.y })
       return
     }
     if (!isDrawing.current) return
-    applyDrawMove(getTouchPos(e.touches[0]))
+    const pos = getTouchPos(e.touches[0])
+    broadcastCursor(pos)
+    applyDrawMove(pos)
   }
 
-  const onTouchEnd = async (e: React.TouchEvent) => {
+  const onTouchEnd = (e: React.TouchEvent) => {
     e.preventDefault()
     if (e.touches.length < 2) lastTouchDistance.current = null
     if (isPanning.current && e.touches.length < 2) { isPanning.current = false; return }
     if (!isDrawing.current) return
-    isDrawing.current = false
-    const octx = getOctx()!
-    octx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
-
-    const points = currentStroke.current
-    if (points.length < 1) return
-
-    if (tool !== 'pen' && tool !== 'eraser' && points.length >= 1 && e.changedTouches.length > 0) {
-      const endPos = getTouchPos(e.changedTouches[0])
-      points.push(endPos)
-      drawStroke({ room_id: roomId, user_id: myId, user_color: color, tool, points, size, emoji: penEmoji || undefined })
-    }
-
-    if (points.length < 2) return
-
-    const stroke: Stroke = { room_id: roomId, user_id: myId, user_color: color, tool, points, size, emoji: penEmoji || undefined }
-    await supabase.from('strokes').insert(stroke)
-    await updatePixelArea()
-    currentStroke.current = []
-  }
-
-  /* ── Shared draw move logic ── */
-  const applyDrawMove = (pos: { x: number; y: number }) => {
-    const ctx = getCtx()!
-    const octx = getOctx()!
-
-    if (tool === 'pen' || tool === 'eraser') {
-      if (tool === 'eraser') {
-        ctx.save(); ctx.globalCompositeOperation = 'destination-out'
-        ctx.strokeStyle = 'rgba(0,0,0,1)'; ctx.lineWidth = size * 3; ctx.lineCap = 'round'
-        ctx.lineTo(pos.x, pos.y); ctx.stroke(); ctx.restore()
-      } else {
-        ctx.strokeStyle = color; ctx.lineWidth = size; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
-        ctx.lineTo(pos.x, pos.y); ctx.stroke()
-        if (penEmoji && currentStroke.current.length % 8 === 0) {
-          ctx.font = `${size + 10}px serif`; ctx.fillText(penEmoji, pos.x, pos.y)
-        }
-      }
-      const dx = pos.x - lastPos.current.x, dy = pos.y - lastPos.current.y
-      pixelArea.current += Math.sqrt(dx * dx + dy * dy) * size
-    } else {
-      const start = currentStroke.current[0]
-      octx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
-      octx.strokeStyle = color; octx.lineWidth = size; octx.lineCap = 'round'
-      if (tool === 'line') { octx.beginPath(); octx.moveTo(start.x, start.y); octx.lineTo(pos.x, pos.y); octx.stroke() }
-      else if (tool === 'rect') { octx.strokeRect(start.x, start.y, pos.x - start.x, pos.y - start.y) }
-      else if (tool === 'circle') {
-        const rx = (pos.x - start.x) / 2, ry = (pos.y - start.y) / 2
-        octx.beginPath(); octx.ellipse(start.x + rx, start.y + ry, Math.abs(rx), Math.abs(ry), 0, 0, Math.PI * 2); octx.stroke()
-      }
-    }
-    currentStroke.current.push(pos)
-    lastPos.current = pos
+    const endPos = e.changedTouches.length > 0 ? getTouchPos(e.changedTouches[0]) : undefined
+    finishStroke(endPos)
   }
 
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault()
-    const delta = e.deltaY > 0 ? -0.05 : 0.05
-    setZoom(z => Math.max(0.1, Math.min(4, z + delta)))
+    setZoom(z => Math.max(0.1, Math.min(4, z + (e.deltaY > 0 ? -0.05 : 0.05))))
   }
+
+  /* ── Undo / Redo ── */
+  const undo = useCallback(async () => {
+    const id = strokeHistory.current.pop()
+    if (id === undefined) return
+    const { data } = await supabase.from('strokes').select('*').eq('id', id).single()
+    if (data) undoStack.current.push(data as Stroke)
+    await supabase.from('strokes').delete().eq('id', id).eq('user_id', myId)
+    await redrawCanvas()
+  }, [myId, redrawCanvas])
+
+  const redo = useCallback(async () => {
+    const stroke = undoStack.current.pop()
+    if (!stroke) return
+    const { id: _id, ...strokeData } = stroke as Stroke & { id?: number }
+    const { data: ins } = await supabase.from('strokes').insert(strokeData).select('id').single()
+    if (ins?.id) strokeHistory.current.push(ins.id as number)
+    drawStroke(stroke)
+  }, [drawStroke])
 
   /* ── Tools ── */
   const floodFill = (pos: { x: number; y: number }) => {
@@ -485,8 +579,7 @@ export default function RoomPage() {
     const idx = (y * CANVAS_WIDTH + x) * 4
     const [tr, tg, tb] = [data[idx], data[idx + 1], data[idx + 2]]
     const fc = hexToRgb(color)
-    if (!fc) return
-    if (tr === fc.r && tg === fc.g && tb === fc.b) return
+    if (!fc || (tr === fc.r && tg === fc.g && tb === fc.b)) return
     const stack = [[x, y]]
     while (stack.length) {
       const [cx, cy] = stack.pop()!
@@ -509,7 +602,8 @@ export default function RoomPage() {
     ctx.fillStyle = color
     ctx.fillText(text, pos.x, pos.y)
     const stroke: Stroke = { room_id: roomId, user_id: myId, user_color: color, tool: 'text', points: [pos], size, emoji: text }
-    await supabase.from('strokes').insert(stroke)
+    const { data: ins } = await supabase.from('strokes').insert(stroke).select('id').single()
+    if (ins?.id) strokeHistory.current.push(ins.id as number)
     pixelArea.current += text.length * size * 10
     await updatePixelArea()
   }
@@ -521,6 +615,37 @@ export default function RoomPage() {
   const hexToRgb = (hex: string) => {
     const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16)
     return { r, g, b }
+  }
+
+  /* ── Timelapse ── */
+  const playTimelapse = async () => {
+    timelapseRunning.current = true
+    setShowTimelapse(true)
+    setTimelapseProgress(0)
+    const canvas = canvasRef.current!
+    const ctx = canvas.getContext('2d')!
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+    const { data } = await supabase.from('strokes').select('*').eq('room_id', roomId).order('id')
+    if (!data) { setShowTimelapse(false); return }
+    for (let i = 0; i < data.length; i++) {
+      if (!timelapseRunning.current) break
+      drawStroke(data[i] as Stroke)
+      setTimelapseProgress(Math.round(((i + 1) / data.length) * 100))
+      await new Promise(r => setTimeout(r, 35))
+    }
+    timelapseRunning.current = false
+    setShowTimelapse(false)
+    setTimelapseProgress(0)
+    if (timelapseRunning.current === false) redrawCanvas()
+  }
+
+  const stopTimelapse = () => {
+    timelapseRunning.current = false
+    setShowTimelapse(false)
+    setTimelapseProgress(0)
+    redrawCanvas()
   }
 
   /* ── Comment ── */
@@ -561,6 +686,7 @@ export default function RoomPage() {
   }
 
   const leaveRoom = async () => {
+    channelRef.current?.send({ type: 'broadcast', event: 'cursor_leave', payload: { userId: myId } })
     await supabase.from('room_users').delete().eq('id', myId).eq('room_id', roomId)
     router.push('/')
   }
@@ -573,7 +699,6 @@ export default function RoomPage() {
     link.click()
   }
 
-  /* ── Timer display ── */
   const timerDisplay = timerLeft > 0
     ? `${Math.floor(timerLeft / 60)}:${(timerLeft % 60).toString().padStart(2, '0')}`
     : null
@@ -603,7 +728,10 @@ export default function RoomPage() {
           <span className={`${styles.timer} ${timerLeft < 60 ? styles.timerRed : ''}`}>⏱ {timerDisplay}</span>
         )}
         <div className={styles.topbarActions}>
+          <button className={styles.tbBtn} onClick={undo} title="Undo (Ctrl+Z)">↩ Undo</button>
+          <button className={styles.tbBtn} onClick={redo} title="Redo (Ctrl+Y)">↪ Redo</button>
           <button className={`${styles.tbBtn} ${commentMode ? styles.tbBtnActive : ''}`} onClick={() => setCommentMode(!commentMode)}>💬 Comment</button>
+          <button className={styles.tbBtn} onClick={playTimelapse}>🎬 Replay</button>
           <button className={styles.tbBtn} onClick={() => setZoom(z => Math.min(4, z + 0.1))}>🔍+</button>
           <button className={styles.tbBtn} onClick={() => setZoom(z => Math.max(0.1, z - 0.1))}>🔍−</button>
           <button className={styles.tbBtn} onClick={() => { setZoom(0.4); setPan({ x: 0, y: 0 }) }}>Reset</button>
@@ -680,6 +808,14 @@ export default function RoomPage() {
             <div className={styles.sideLabel}>Zoom — {Math.round(zoom * 100)}%</div>
             <input type="range" min="10" max="400" step="5" value={Math.round(zoom * 100)} onChange={e => setZoom(+e.target.value / 100)} className={styles.slider} />
           </div>
+
+          <div className={styles.sideSection}>
+            <div className={styles.sideLabel}>Actions</div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button className={styles.toolBtn} style={{ flex: 1, fontSize: 11 }} onClick={undo} title="Ctrl+Z">↩ Undo</button>
+              <button className={styles.toolBtn} style={{ flex: 1, fontSize: 11 }} onClick={redo} title="Ctrl+Y">↪ Redo</button>
+            </div>
+          </div>
         </div>
 
         {/* CANVAS */}
@@ -694,12 +830,30 @@ export default function RoomPage() {
               isDrawing.current = false
               getOctx()?.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
               if (emojiFollowerRef.current) emojiFollowerRef.current.style.display = 'none'
+              channelRef.current?.send({ type: 'broadcast', event: 'cursor_leave', payload: { userId: myId } })
             }}
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
           />
           <canvas ref={overlayRef} style={{ ...canvasStyle, pointerEvents: 'none', opacity: 0.9 }} />
+
+          {/* Remote cursors */}
+          {Object.values(remoteCursors).map(cursor => (
+            <div
+              key={cursor.userId}
+              className={styles.remoteCursor}
+              style={{
+                left: `calc(50% + ${pan.x}px + ${(cursor.x - CANVAS_WIDTH / 2) * zoom}px)`,
+                top: `calc(50% + ${pan.y}px + ${(cursor.y - CANVAS_HEIGHT / 2) * zoom}px)`,
+              }}
+            >
+              <svg width="14" height="18" viewBox="0 0 14 18" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.6))' }}>
+                <path d="M0 0 L0 13 L3.5 9.5 L7 17 L9 16 L5.5 8.5 L10 8.5 Z" fill={cursor.color} stroke="#fff" strokeWidth="0.8" />
+              </svg>
+              <span className={styles.cursorLabel} style={{ background: cursor.color }}>{cursor.name}</span>
+            </div>
+          ))}
 
           {/* Comment pins */}
           {comments.map((c, i) => (
@@ -725,7 +879,21 @@ export default function RoomPage() {
               {penEmoji}
             </div>
           )}
+
           <div className={styles.zoomBadge}>{Math.round(zoom * 100)}%</div>
+
+          {/* Timelapse overlay */}
+          {showTimelapse && (
+            <div className={styles.timelapseOverlay}>
+              <div className={styles.timelapseIcon}>🎬</div>
+              <div className={styles.timelapseTitle}>Replaying drawing history...</div>
+              <div className={styles.timelapseBar}>
+                <div className={styles.timelapseBarFill} style={{ width: `${timelapseProgress}%` }} />
+              </div>
+              <div className={styles.timelapsePercent}>{timelapseProgress}%</div>
+              <button className={styles.timelapseStop} onClick={stopTimelapse}>■ Stop</button>
+            </div>
+          )}
         </div>
 
         {/* RIGHT PANEL */}
@@ -777,16 +945,13 @@ export default function RoomPage() {
           <span>{TOOL_ICONS[tool]}</span>
           <span className={styles.mobileBarLabel}>Tools</span>
         </button>
-        <button
-          className={`${styles.mobileBarBtn} ${commentMode ? styles.mobileBarBtnActive : ''}`}
-          onClick={() => setCommentMode(c => !c)}
-        >
-          <span>📌</span>
-          <span className={styles.mobileBarLabel}>Pin</span>
+        <button className={styles.mobileBarBtn} onClick={undo}>
+          <span>↩</span>
+          <span className={styles.mobileBarLabel}>Undo</span>
         </button>
-        <button className={styles.mobileBarBtn} onClick={() => { setZoom(0.4); setPan({ x: 0, y: 0 }) }}>
-          <span>🏠</span>
-          <span className={styles.mobileBarLabel}>Reset</span>
+        <button className={styles.mobileBarBtn} onClick={playTimelapse}>
+          <span>🎬</span>
+          <span className={styles.mobileBarLabel}>Replay</span>
         </button>
         <button className={styles.mobileBarBtn} onClick={downloadCanvas}>
           <span>💾</span>
