@@ -38,6 +38,7 @@ export default function RoomPage() {
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const isPanning = useRef(false)
   const panStart = useRef({ x: 0, y: 0, px: 0, py: 0 })
+  const lastTouchDistance = useRef<number | null>(null)
 
   const isDrawing = useRef(false)
   const lastPos = useRef({ x: 0, y: 0 })
@@ -54,6 +55,9 @@ export default function RoomPage() {
   const [timerLeft, setTimerLeft] = useState(0)
   const [timerActive, setTimerActive] = useState(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+  const [showMobileTools, setShowMobileTools] = useState(false)
+  const [showMobileChat, setShowMobileChat] = useState(false)
 
   const emojiFollowerRef = useRef<HTMLDivElement>(null)
   const chatBottomRef = useRef<HTMLDivElement>(null)
@@ -72,6 +76,24 @@ export default function RoomPage() {
     subscribeAll()
     return () => { supabase.removeAllChannels() }
   }, [roomId, myId])
+
+  /* ── Auto-remove user when tab/window closes ── */
+  useEffect(() => {
+    if (!myId || !roomId) return
+    const handleBeforeUnload = () => {
+      const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/room_users?id=eq.${myId}&room_id=eq.${roomId}`
+      fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''}`,
+        },
+        keepalive: true,
+      })
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [myId, roomId])
 
   const loadRoom = async () => {
     const { data } = await supabase.from('rooms').select('*').eq('id', roomId).single()
@@ -246,6 +268,7 @@ export default function RoomPage() {
     transform: `translate(-50%, -50%) scale(${zoom})`,
     transformOrigin: 'center',
     cursor: commentMode ? 'cell' : 'crosshair',
+    touchAction: 'none' as const,
   }
 
   const getCanvasPos = (e: React.MouseEvent) => {
@@ -254,6 +277,15 @@ export default function RoomPage() {
     return {
       x: (e.clientX - rect.left) / zoom,
       y: (e.clientY - rect.top) / zoom,
+    }
+  }
+
+  const getTouchPos = (touch: React.Touch) => {
+    const canvas = canvasRef.current!
+    const rect = canvas.getBoundingClientRect()
+    return {
+      x: (touch.clientX - rect.left) / zoom,
+      y: (touch.clientY - rect.top) / zoom,
     }
   }
 
@@ -300,6 +332,111 @@ export default function RoomPage() {
     }
     if (!isDrawing.current) return
     const pos = getCanvasPos(e)
+    applyDrawMove(pos)
+  }
+
+  const onMouseUp = async (e: React.MouseEvent) => {
+    if (isPanning.current) { isPanning.current = false; return }
+    if (!isDrawing.current) return
+    isDrawing.current = false
+    const octx = getOctx()!
+    octx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+
+    const points = currentStroke.current
+    if (points.length < 1) return
+
+    if (tool !== 'pen' && tool !== 'eraser' && points.length >= 1) {
+      const endPos = getCanvasPos(e)
+      points.push(endPos)
+      drawStroke({ room_id: roomId, user_id: myId, user_color: color, tool, points, size, emoji: penEmoji || undefined })
+    }
+
+    if (points.length < 2) return
+
+    const stroke: Stroke = {
+      room_id: roomId, user_id: myId, user_color: color,
+      tool, points, size, emoji: penEmoji || undefined,
+    }
+    await supabase.from('strokes').insert(stroke)
+    await updatePixelArea()
+    currentStroke.current = []
+  }
+
+  /* ── Touch events ── */
+  const onTouchStart = (e: React.TouchEvent) => {
+    e.preventDefault()
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      lastTouchDistance.current = Math.sqrt(dx * dx + dy * dy)
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2
+      isPanning.current = true
+      panStart.current = { x: cx, y: cy, px: pan.x, py: pan.y }
+      return
+    }
+    const touch = e.touches[0]
+    const pos = getTouchPos(touch)
+    if (commentMode) { setPendingCommentPos(pos); setShowCommentModal(true); return }
+    if (tool === 'fill') { floodFill(pos); return }
+    if (tool === 'text') { addText(pos); return }
+    isDrawing.current = true
+    lastPos.current = pos
+    currentStroke.current = [pos]
+    const ctx = getCtx()!
+    ctx.beginPath(); ctx.moveTo(pos.x, pos.y)
+  }
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault()
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (lastTouchDistance.current) {
+        setZoom(z => Math.max(0.1, Math.min(4, z * (dist / lastTouchDistance.current!))))
+      }
+      lastTouchDistance.current = dist
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2
+      setPan({
+        x: panStart.current.px + cx - panStart.current.x,
+        y: panStart.current.py + cy - panStart.current.y,
+      })
+      return
+    }
+    if (!isDrawing.current) return
+    applyDrawMove(getTouchPos(e.touches[0]))
+  }
+
+  const onTouchEnd = async (e: React.TouchEvent) => {
+    e.preventDefault()
+    if (e.touches.length < 2) lastTouchDistance.current = null
+    if (isPanning.current && e.touches.length < 2) { isPanning.current = false; return }
+    if (!isDrawing.current) return
+    isDrawing.current = false
+    const octx = getOctx()!
+    octx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+
+    const points = currentStroke.current
+    if (points.length < 1) return
+
+    if (tool !== 'pen' && tool !== 'eraser' && points.length >= 1 && e.changedTouches.length > 0) {
+      const endPos = getTouchPos(e.changedTouches[0])
+      points.push(endPos)
+      drawStroke({ room_id: roomId, user_id: myId, user_color: color, tool, points, size, emoji: penEmoji || undefined })
+    }
+
+    if (points.length < 2) return
+
+    const stroke: Stroke = { room_id: roomId, user_id: myId, user_color: color, tool, points, size, emoji: penEmoji || undefined }
+    await supabase.from('strokes').insert(stroke)
+    await updatePixelArea()
+    currentStroke.current = []
+  }
+
+  /* ── Shared draw move logic ── */
+  const applyDrawMove = (pos: { x: number; y: number }) => {
     const ctx = getCtx()!
     const octx = getOctx()!
 
@@ -330,33 +467,6 @@ export default function RoomPage() {
     }
     currentStroke.current.push(pos)
     lastPos.current = pos
-  }
-
-  const onMouseUp = async (e: React.MouseEvent) => {
-    if (isPanning.current) { isPanning.current = false; return }
-    if (!isDrawing.current) return
-    isDrawing.current = false
-    const octx = getOctx()!
-    octx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
-
-    const points = currentStroke.current
-    if (points.length < 1) return
-
-    if (tool !== 'pen' && tool !== 'eraser' && points.length >= 1) {
-      const endPos = getCanvasPos(e)
-      points.push(endPos)
-      drawStroke({ room_id: roomId, user_id: myId, user_color: color, tool, points, size, emoji: penEmoji || undefined })
-    }
-
-    if (points.length < 2) return
-
-    const stroke: Stroke = {
-      room_id: roomId, user_id: myId, user_color: color,
-      tool, points, size, emoji: penEmoji || undefined,
-    }
-    await supabase.from('strokes').insert(stroke)
-    await updatePixelArea()
-    currentStroke.current = []
   }
 
   const onWheel = (e: React.WheelEvent) => {
@@ -475,6 +585,8 @@ export default function RoomPage() {
     pen: 'Pen', line: 'Line', rect: 'Rectangle', circle: 'Circle', eraser: 'Eraser', fill: 'Fill', text: 'Text'
   }
 
+  const closeMobilePanels = () => { setShowMobileTools(false); setShowMobileChat(false) }
+
   return (
     <div className={styles.app}>
       {/* TOPBAR */}
@@ -507,7 +619,7 @@ export default function RoomPage() {
 
       <div className={styles.main}>
         {/* LEFT SIDEBAR */}
-        <div className={styles.sidebar}>
+        <div className={`${styles.sidebar} ${showMobileTools ? styles.sidebarOpen : ''}`}>
           <div className={styles.sideSection}>
             <div className={styles.sideLabel}>Tools</div>
             <div className={styles.toolGrid}>
@@ -515,7 +627,7 @@ export default function RoomPage() {
                 <button
                   key={t}
                   className={`${styles.toolBtn} ${tool === t ? styles.toolBtnActive : ''}`}
-                  onClick={() => setTool(t)}
+                  onClick={() => { setTool(t); closeMobilePanels() }}
                   title={TOOL_LABELS[t]}
                 >
                   {TOOL_ICONS[t]}
@@ -583,6 +695,9 @@ export default function RoomPage() {
               getOctx()?.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
               if (emojiFollowerRef.current) emojiFollowerRef.current.style.display = 'none'
             }}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
           />
           <canvas ref={overlayRef} style={{ ...canvasStyle, pointerEvents: 'none', opacity: 0.9 }} />
 
@@ -614,7 +729,7 @@ export default function RoomPage() {
         </div>
 
         {/* RIGHT PANEL */}
-        <div className={styles.rightPanel}>
+        <div className={`${styles.rightPanel} ${showMobileChat ? styles.rightPanelOpen : ''}`}>
           <div className={styles.usersSection}>
             <div className={styles.panelTitle}>👥 Participants</div>
             {users.map(u => (
@@ -646,6 +761,44 @@ export default function RoomPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Mobile overlay backdrop */}
+      {(showMobileTools || showMobileChat) && (
+        <div className={styles.mobileOverlay} onClick={closeMobilePanels} />
+      )}
+
+      {/* Mobile bottom bar */}
+      <div className={styles.mobileBar}>
+        <button
+          className={`${styles.mobileBarBtn} ${showMobileTools ? styles.mobileBarBtnActive : ''}`}
+          onClick={() => { setShowMobileTools(v => !v); setShowMobileChat(false) }}
+        >
+          <span>{TOOL_ICONS[tool]}</span>
+          <span className={styles.mobileBarLabel}>Tools</span>
+        </button>
+        <button
+          className={`${styles.mobileBarBtn} ${commentMode ? styles.mobileBarBtnActive : ''}`}
+          onClick={() => setCommentMode(c => !c)}
+        >
+          <span>📌</span>
+          <span className={styles.mobileBarLabel}>Pin</span>
+        </button>
+        <button className={styles.mobileBarBtn} onClick={() => { setZoom(0.4); setPan({ x: 0, y: 0 }) }}>
+          <span>🏠</span>
+          <span className={styles.mobileBarLabel}>Reset</span>
+        </button>
+        <button className={styles.mobileBarBtn} onClick={downloadCanvas}>
+          <span>💾</span>
+          <span className={styles.mobileBarLabel}>Save</span>
+        </button>
+        <button
+          className={`${styles.mobileBarBtn} ${showMobileChat ? styles.mobileBarBtnActive : ''}`}
+          onClick={() => { setShowMobileChat(v => !v); setShowMobileTools(false) }}
+        >
+          <span>👥</span>
+          <span className={styles.mobileBarLabel}>Chat</span>
+        </button>
       </div>
 
       {/* MODALS */}

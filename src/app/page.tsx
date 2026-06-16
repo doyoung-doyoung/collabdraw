@@ -20,6 +20,13 @@ export default function LobbyPage() {
     '#db2777','#ca8a04','#16a34a','#0284c7','#9333ea',
   ]
 
+  useEffect(() => {
+    const savedName = localStorage.getItem('collabdraw_name')
+    const savedColor = localStorage.getItem('collabdraw_color')
+    if (savedName) setUserName(savedName)
+    if (savedColor) setUserColor(savedColor)
+  }, [])
+
   const fetchRooms = useCallback(async () => {
     const { data } = await supabase
       .from('rooms')
@@ -40,14 +47,18 @@ export default function LobbyPage() {
   }, [fetchRooms])
 
   const getUserId = () => {
-    let id = sessionStorage.getItem('collabdraw_uid')
-    if (!id) { id = uuidv4(); sessionStorage.setItem('collabdraw_uid', id) }
+    let id = localStorage.getItem('collabdraw_uid') || sessionStorage.getItem('collabdraw_uid')
+    if (!id) { id = uuidv4() }
+    localStorage.setItem('collabdraw_uid', id)
+    sessionStorage.setItem('collabdraw_uid', id)
     return id
   }
 
   const saveUser = (color: string, name: string) => {
     sessionStorage.setItem('collabdraw_color', color)
     sessionStorage.setItem('collabdraw_name', name)
+    localStorage.setItem('collabdraw_color', color)
+    localStorage.setItem('collabdraw_name', name)
   }
 
   const createRoom = async () => {
