@@ -404,6 +404,10 @@
   display: block;
 }
 
+@media (max-width: 768px) {
+  .kickBtn { display: block; }
+}
+
 .chatSection {
   flex: 1;
   display: flex;

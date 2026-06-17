@@ -29,7 +29,6 @@ html, body {
   color: var(--text);
   font-family: 'Sora', sans-serif;
   -webkit-font-smoothing: antialiased;
-  overflow: hidden;
 }
 
 button {

@@ -293,6 +293,11 @@ export default function RoomPage() {
       .on('broadcast', { event: 'cursor_leave' }, ({ payload }: { payload: { userId: string } }) => {
         setRemoteCursors(prev => { const n = { ...prev }; delete n[payload.userId]; return n })
       })
+      .on('broadcast', { event: 'canvas_clear' }, () => {
+        const ctx = canvasRef.current?.getContext('2d')
+        if (ctx) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT) }
+        overlayRef.current?.getContext('2d')?.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+      })
       .subscribe()
     channelRef.current = ch
   }
@@ -518,13 +523,6 @@ export default function RoomPage() {
   const onTouchMove = (e: React.TouchEvent) => {
     e.preventDefault()
     if (e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX
-      const dy = e.touches[0].clientY - e.touches[1].clientY
-      const dist = Math.sqrt(dx * dx + dy * dy)
-      if (lastTouchDistance.current) {
-        setZoom(z => Math.max(0.1, Math.min(4, z * (dist / lastTouchDistance.current!))))
-      }
-      lastTouchDistance.current = dist
       const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2
       const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2
       setPan({ x: panStart.current.px + cx - panStart.current.x, y: panStart.current.py + cy - panStart.current.y })
@@ -691,6 +689,22 @@ export default function RoomPage() {
     router.push('/')
   }
 
+  const handleClearCanvas = async () => {
+    if (!confirm('캔버스를 전부 지우겠습니까? 되돌릴 수 없습니다.')) return
+    await supabase.from('strokes').delete().eq('room_id', roomId)
+    const ctx = getCtx()
+    if (ctx) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT) }
+    getOctx()?.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+    strokeHistory.current = []
+    channelRef.current?.send({ type: 'broadcast', event: 'canvas_clear', payload: {} })
+  }
+
+  const deleteRoom = async () => {
+    if (!confirm('방을 완전히 삭제하겠습니까? 모든 그림과 데이터가 사라집니다.')) return
+    await supabase.from('rooms').delete().eq('id', roomId)
+    router.push('/')
+  }
+
   const downloadCanvas = () => {
     const canvas = canvasRef.current!
     const link = document.createElement('a')
@@ -734,13 +748,15 @@ export default function RoomPage() {
           <button className={styles.tbBtn} onClick={playTimelapse}>🎬 Replay</button>
           <button className={styles.tbBtn} onClick={() => setZoom(z => Math.min(4, z + 0.1))}>🔍+</button>
           <button className={styles.tbBtn} onClick={() => setZoom(z => Math.max(0.1, z - 0.1))}>🔍−</button>
-          <button className={styles.tbBtn} onClick={() => { setZoom(0.4); setPan({ x: 0, y: 0 }) }}>Reset</button>
+          <button className={styles.tbBtn} onClick={() => { setZoom(0.4); setPan({ x: 0, y: 0 }) }}>↺ View</button>
+          <button className={`${styles.tbBtn} ${styles.tbBtnRed}`} onClick={handleClearCanvas}>🗑️ Clear</button>
           <button className={styles.tbBtn} onClick={downloadCanvas}>💾 Save</button>
           {isHost && room && !room.timer_pause_used && timerActive && (
             <button className={styles.tbBtn} onClick={handleTimerStop}>⏸ Pause</button>
           )}
           <button className={`${styles.tbBtn} ${styles.tbBtnGreen}`} onClick={() => setShowStatsModal(true)}>📊 Finish</button>
-          {isHost && <button className={`${styles.tbBtn} ${styles.tbBtnRed}`} onClick={endRoom}>🔚 End Room</button>}
+          {isHost && <button className={`${styles.tbBtn} ${styles.tbBtnRed}`} onClick={endRoom}>🔚 End</button>}
+          {isHost && <button className={`${styles.tbBtn} ${styles.tbBtnRed}`} onClick={deleteRoom}>🗑️ Del Room</button>}
           <button className={styles.tbBtn} onClick={leaveRoom}>← Leave</button>
         </div>
       </div>
@@ -945,24 +961,24 @@ export default function RoomPage() {
           <span>{TOOL_ICONS[tool]}</span>
           <span className={styles.mobileBarLabel}>Tools</span>
         </button>
-        <button className={styles.mobileBarBtn} onClick={undo}>
-          <span>↩</span>
-          <span className={styles.mobileBarLabel}>Undo</span>
+        <button className={styles.mobileBarBtn} onClick={() => setZoom(z => Math.max(0.1, z - 0.1))}>
+          <span>🔍−</span>
+          <span className={styles.mobileBarLabel}>Zoom−</span>
         </button>
-        <button className={styles.mobileBarBtn} onClick={playTimelapse}>
-          <span>🎬</span>
-          <span className={styles.mobileBarLabel}>Replay</span>
+        <button className={styles.mobileBarBtn} onClick={() => { setZoom(0.4); setPan({ x: 0, y: 0 }) }}>
+          <span>⌂</span>
+          <span className={styles.mobileBarLabel}>Reset</span>
         </button>
-        <button className={styles.mobileBarBtn} onClick={downloadCanvas}>
-          <span>💾</span>
-          <span className={styles.mobileBarLabel}>Save</span>
+        <button className={styles.mobileBarBtn} onClick={() => setZoom(z => Math.min(4, z + 0.1))}>
+          <span>🔍+</span>
+          <span className={styles.mobileBarLabel}>Zoom+</span>
         </button>
         <button
           className={`${styles.mobileBarBtn} ${showMobileChat ? styles.mobileBarBtnActive : ''}`}
           onClick={() => { setShowMobileChat(v => !v); setShowMobileTools(false) }}
         >
           <span>👥</span>
-          <span className={styles.mobileBarLabel}>Chat</span>
+          <span className={styles.mobileBarLabel}>People</span>
         </button>
       </div>
 
