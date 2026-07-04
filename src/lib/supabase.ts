@@ -16,6 +16,7 @@ export type Room = {
     timer_paused: boolean
     timer_pause_used: boolean
     is_ended: boolean
+    topic?: string | null
     created_at: string
 }
 
@@ -25,6 +26,7 @@ export type RoomUser = {
     name: string
     color: string
     pixel_area: number
+    is_muted?: boolean
     joined_at: string
 }
 
@@ -56,5 +58,6 @@ export type ChatMessage = {
     user_id: string
     user_name: string
     user_color: string
-    emoji: string
+    emoji?: string | null
+    message?: string | null
 }
