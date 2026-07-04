@@ -659,3 +659,124 @@
 @media (prefers-reduced-motion: reduce) {
   .sidebar, .rightPanel { transition: none; }
 }
+
+/* ══════════════ v2 추가 스타일 ══════════════ */
+
+/* 주제 배지 */
+.topicBadge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(124,58,237,0.25), rgba(236,72,153,0.25));
+  border: 1px solid rgba(236,72,153,0.4);
+  color: #f9a8d4;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tbBtnPurple {
+  background: rgba(124,58,237,0.25) !important;
+  border-color: rgba(167,139,250,0.5) !important;
+  color: #c4b5fd !important;
+}
+
+/* 방장 액션 버튼 (뮤트/왕관)
+.hostBtns {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.hostActionBtn {
+  display: none;
+  font-size: 12px;
+  padding: 2px 5px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.hostActionBtn:hover { background: rgba(255,255,255,0.18); }
+.userRow:hover .hostActionBtn { display: block; }
+
+@media (max-width: 768px) {
+  .hostActionBtn { display: block; }
+}
+
+/* 텍스트 채팅 */
+.chatText {
+  font-size: 12px;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.chatInputRow {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.chatTextInput {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+
+.chatTextInput:focus { border-color: rgba(167,139,250,0.6); }
+.chatTextInput::placeholder { color: rgba(255,255,255,0.35); }
+
+.chatSendBtn {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(90deg, #7c3aed, #ec4899);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.chatSendBtn:active { transform: scale(0.95); }
+
+/* 그리기 금지 배너 */
+.mutedBanner {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(220,38,38,0.85);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+  pointer-events: none;
+  animation: mutedPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes mutedPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+/* 터치 기기: 버튼 크게 (아이들 손가락용) */
+@media (pointer: coarse) {
+  .toolBtn { min-height: 44px; font-size: 20px; }
+  .chatEmojiBtn { font-size: 20px; padding: 4px; }
+  .swatch { width: 22px; height: 22px; }
+  .kickBtn, .hostActionBtn { display: block; padding: 5px 8px; font-size: 12px; }
+  .chatTextInput { font-size: 16px; } /* iOS 자동 확대 방지 */
+}
